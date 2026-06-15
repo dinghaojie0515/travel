@@ -36,10 +36,24 @@ travel/
 │   └── utils/              # 向量、检索、LLM、存储等工具
 ├── frontend/
 │   └── index.html          # 前端单页（智能对话 + 导入文档）
-├── docker-compose.yml      # Milvus / MongoDB / MinIO 服务
+├── docker-compose.yml      # Milvus / MongoDB / MinIO
 ├── requirements.txt
-├── .env.example            # 环境变量模板（复制为 .env 后填写）
-└── README.md
+└── .env.example            # 环境变量模板（复制为 .env 后填写）
+```
+
+## 架构流程
+
+### 文档导入
+
+```
+上传 .md → 解析 Markdown → 智能分块 → 稀疏/稠密向量化 → Milvus 写入 → MinIO 归档
+```
+
+### RAG 问答
+
+```
+用户提问 → 加载历史 → 三路并发召回（向量 + HyDE + Web）
+         → 合并去重 → Reranker 重排 → 构建 Prompt → Qwen 流式生成 → 保存历史
 ```
 
 ## 快速开始
@@ -57,16 +71,17 @@ cd travel
 conda create -n travel-rag python=3.10 -y
 conda activate travel-rag
 pip install -r requirements.txt
-pip install tavily-python   # 可选，启用 Web 搜索
 ```
 
-### 3. 启动 Docker 服务
+### 3. 启动基础服务（Docker）
 
-在服务器（或本地）启动 Milvus、MongoDB、MinIO：
+在服务器上执行：
 
 ```bash
 docker compose up -d
 ```
+
+服务包括：Milvus（19530）、MongoDB（27017）、MinIO（9000/9001）。
 
 ### 4. 配置环境变量
 
@@ -79,12 +94,12 @@ cp .env.example .env
 | 变量 | 说明 |
 |------|------|
 | `DASHSCOPE_API_KEY` | 阿里云百炼 API Key |
-| `SERVER_IP` | Docker 服务所在机器 IP（本地开发填 `127.0.0.1`） |
-| `BGE_M3_MODEL` | BGE-M3 本地路径或 HuggingFace 模型名 |
-| `BGE_RERANKER_MODEL` | Reranker 本地路径或模型名 |
-| `TAVILY_API_KEY` | 可选，启用 Web 搜索第三路召回 |
+| `SERVER_IP` | Docker 服务所在服务器公网 IP |
+| `BGE_M3_MODEL` | 本地 BGE-M3 模型路径（可选，默认 HuggingFace 名） |
+| `BGE_RERANKER_MODEL` | 本地 Reranker 模型路径（可选） |
+| `TAVILY_API_KEY` | Tavily Web 搜索 Key（可选，启用第三路召回） |
 
-> **注意**：`.env` 已加入 `.gitignore`，请勿将密钥提交到 Git。
+> **注意**：`.env` 已被 `.gitignore` 忽略，请勿将密钥提交到 Git。
 
 ### 5. 下载本地模型（推荐）
 
@@ -96,7 +111,7 @@ python -c "from modelscope import snapshot_download; snapshot_download('BAAI/bge
 python -c "from modelscope import snapshot_download; snapshot_download('BAAI/bge-reranker-large', cache_dir='./models')"
 ```
 
-然后在 `.env` 中指向本地目录，例如：
+然后在 `.env` 中指向本地路径，例如：
 
 ```
 BGE_M3_MODEL=./models/bge-m3
@@ -109,28 +124,13 @@ BGE_RERANKER_MODEL=./models/bge-reranker-large
 python main.py
 ```
 
-浏览器访问：`http://localhost:8000`
+访问：
 
-- **智能对话**：顶部导航「智能对话」
-- **导入文档**：顶部导航「导入文档」，上传 `.md` 文件
-- **API 文档**：`http://localhost:8000/docs`
+- 前端界面：http://localhost:8000
+- API 文档：http://localhost:8000/docs
+- 健康检查：http://localhost:8000/health/services
 
-## 核心流程
-
-### 文档导入
-
-```
-上传 .md → 解析 YAML 元数据 → 文本分块 → 稀疏/稠密向量化 → Milvus 写入 → MinIO 归档
-```
-
-### RAG 问答
-
-```
-用户提问 → 加载历史 → 三路并发召回（向量 + HyDE + Web）
-         → 合并去重 → Reranker 重排 → 构建 Prompt → Qwen 流式生成 → 展示引用来源
-```
-
-## API 概览
+## 主要 API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -138,13 +138,12 @@ python main.py
 | GET | `/api/ingest/status/{task_id}` | 查询导入进度 |
 | POST | `/api/chat/stream` | 流式问答（SSE） |
 | POST | `/api/chat/` | 非流式问答 |
-| GET | `/api/chat/history/{session_id}` | 会话历史 |
 | GET | `/api/search/` | 知识检索 |
 | GET | `/health/services` | 服务健康检查 |
 
-## 文档元数据（可选）
+## 文档格式
 
-在 `.md` 文件开头添加 YAML frontmatter，可丰富引用来源信息：
+支持 YAML frontmatter 元数据：
 
 ```yaml
 ---
@@ -152,14 +151,20 @@ content_type: 景点介绍
 attraction_name: 天涯海角
 region: 三亚
 ---
+
+正文内容...
 ```
 
-## 开发说明
+## 安全说明
 
-- **本地开发**：Python 在 Windows/Mac 本地运行，Docker 服务可部署在阿里云 ECS
-- **向量维度**：`text-embedding-v4` 默认 1024 维，请保持 `EMBEDDING_DIM=1024`
-- **pymilvus**：需 `>=2.5.0`
+以下内容**不会**也不应提交到仓库：
 
-## 许可证
+- `.env` 及所有 API Key
+- 服务器 IP、数据库密码等私有配置
+- 本地模型权重文件（`.bin` / `.pt` / `models/` 等）
+
+请仅使用 `.env.example` 作为配置模板。
+
+## License
 
 MIT
