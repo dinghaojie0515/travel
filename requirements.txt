@@ -1,0 +1,42 @@
+# ========== Web 框架 ==========
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+python-multipart==0.0.20
+
+# ========== LangChain / LangGraph ==========
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-openai==0.3.19
+langgraph==0.4.8
+
+# ========== 向量数据库 ==========
+pymilvus>=2.5.0
+
+# ========== 文档数据库 ==========
+pymongo==4.13.0
+
+# ========== 对象存储 ==========
+minio==7.2.15
+
+# ========== Embedding & Reranker（BGE-M3 本地模型）==========
+FlagEmbedding==1.3.4
+torch==2.7.0
+transformers==4.51.3
+
+# ========== OpenAI 兼容客户端（调用阿里云百炼）==========
+openai==1.86.0
+
+# ========== 文档处理 ==========
+markdown==3.8
+python-frontmatter==1.1.0
+
+# ========== Web 搜索（可选，用于第三路召回）==========
+tavily-python
+
+# ========== 工具 ==========
+python-dotenv==1.1.0
+pydantic==2.11.5
+pydantic-settings==2.9.1
+httpx==0.28.1
+sse-starlette==2.3.4
+loguru==0.7.3
